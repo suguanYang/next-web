@@ -1,0 +1,63 @@
+{
+  "name": "next-web-server",
+  "version": "0.0.1",
+  "description": "",
+  "main": "src/app.ts",
+  "private": true,
+  "keywords": [],
+  "scripts": {
+    "dev": "ts-node-dev -r ./dotenv.js -r tsconfig-paths/register --files src/app.ts",
+    "server": "NODE_LOG_DIR=/tmp ENABLE_NODE_LOG=YES node --max-old-space-size=8192 src/app.js"
+  },
+  "dependencies": {
+    "@types/qs": "^6.9.8",
+    "@vitejs/plugin-react": "3.0.0",
+    "acorn": "8.10.0",
+    "dayjs": "1.11.7",
+    "es-module-lexer": "1.3.0",
+    "fs-extra": "10.0.0",
+    "ioredis": "5.2.4",
+    "koa": "2.14.2",
+    "koa-bodyparser": "4.4.1",
+    "koa-connect": "2.1.0",
+    "koa-router": "12.0.0",
+    "less": "4.1.3",
+    "log4js": "6.3.0",
+    "magic-string": "0.25.7",
+    "mime": "2.4.7",
+    "node-cron": "3.0.2",
+    "piscina": "4.1.0",
+    "postcss-url": "10.1.3",
+    "qs": "6.11.2",
+    "vite": "4.4.9"
+  },
+  "devDependencies": {
+    "@types/estree": "0.0.48",
+    "@types/fs-extra": "9.0.12",
+    "@types/koa": "2.13.5",
+    "@types/koa-bodyparser": "4.3.10",
+    "@types/koa-router": "7.4.1",
+    "@types/less": "3.0.3",
+    "@types/mime": "2.0.3",
+    "@types/node": "18.11.18",
+    "@types/node-cron": "3.0.7",
+    "@types/postcss-url": "10.0.0",
+    "@typescript-eslint/eslint-plugin": "4.10.0",
+    "@typescript-eslint/parser": "4.10.0",
+    "eslint": "7.15.0",
+    "eslint-config-prettier": "7.1.0",
+    "eslint-plugin-prettier": "3.3.0",
+    "module-alias": "2.2.2",
+    "prettier": "2.2.1",
+    "ts-node": "10.9.1",
+    "ts-node-dev": "2.0.0",
+    "tsconfig-paths": "4.1.1",
+    "typescript": "5.2.2"
+  },
+  "engines": {
+    "node": ">=10.0.0"
+  },
+  "_moduleAliases": {
+    "@": "src"
+  }
+}
