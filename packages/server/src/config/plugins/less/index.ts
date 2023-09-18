@@ -1,11 +1,14 @@
-import path from 'path';
+import path from "path";
 
-import { FileManager } from 'less';
+import { FileManager } from "less";
 
-import { aliasResove } from '@/config/alias';
-import { PREVIEW_ROOT_DIR } from '@/common/app';
-import { tryExtractAppInfoFromPath } from '@/utils';
-import { tryLoadResource, tryResolveMemoizedFile } from '@/source-management/remote-source';
+import { aliasResove } from "@/config/alias";
+import { PREVIEW_ROOT_DIR } from "@/common/app";
+import { tryExtractAppInfoFromPath } from "@/utils";
+import {
+  tryLoadResource,
+  tryResolveMemoizedFile,
+} from "@/source-management/remote-source";
 
 class MemoizedFile extends FileManager {
   constructor() {
@@ -21,24 +24,23 @@ class MemoizedFile extends FileManager {
   async resolve(filename: any, dir: any) {
     const basedir = dir ? dir : PREVIEW_ROOT_DIR;
 
-    const { appId, platform, pureAppPath } = tryExtractAppInfoFromPath(
+    const { appId, pureAppPath } = tryExtractAppInfoFromPath(
       path.resolve(basedir, filename),
-      PREVIEW_ROOT_DIR,
+      PREVIEW_ROOT_DIR
     );
 
-    const alias = aliasResove(filename, '');
+    const alias = aliasResove(filename, "");
 
-    const resolvedAlias = alias ? `/${appId}/${platform}${alias}` : pureAppPath;
+    const resolvedAlias = alias ? `/${appId}/${alias}` : pureAppPath;
 
     if (!appId) {
       return null;
     }
     const resolvedPath = tryResolveMemoizedFile(
       appId,
-      platform,
       resolvedAlias,
       // '1',
-      true,
+      true
     );
     if (!resolvedPath) {
       return null;
@@ -46,7 +48,6 @@ class MemoizedFile extends FileManager {
 
     return {
       appId,
-      platform,
       path: resolvedPath,
     };
   }
@@ -57,7 +58,10 @@ class MemoizedFile extends FileManager {
       return await super.loadFile(filename, dir, opts, env);
     }
 
-    const contents = tryLoadResource(resolved.appId, resolved.platform, resolved.path);
+    const contents = tryLoadResource(
+      resolved.appId,
+      resolved.path
+    );
     if (!contents) {
       return await super.loadFile(filename, dir, opts, env);
     }

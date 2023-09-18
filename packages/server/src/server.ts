@@ -1,12 +1,12 @@
-import { ServerResponse } from 'http';
+import { ServerResponse } from "http";
 
-import mime from 'mime';
-import qs from 'querystring';
-import Koa, { Next } from 'koa';
-import KoaConnect from 'koa-connect';
-import { RouterContext } from 'koa-router';
-import { createServer, ModuleGraph } from 'vite';
-import type { DepsOptimizer, InlineConfig, ViteDevServer } from 'vite';
+import mime from "mime";
+import qs from "querystring";
+import Koa, { Next } from "koa";
+import KoaConnect from "koa-connect";
+import { RouterContext } from "koa-router";
+import { createServer, ModuleGraph } from "vite";
+import type { DepsOptimizer, InlineConfig, ViteDevServer } from "vite";
 
 import {
   cleanUrl,
@@ -14,37 +14,32 @@ import {
   asModuleSpecifierInfo,
   moduleSpecifierInfo2Str,
   INVALID_APP_QUERY_PLACEHOLDER,
-} from '@/utils';
+} from "@/utils";
 import {
-  // PREVIEW_ROOT_DIR,
   PREVIEW_MODULE_INFO,
-  // PREVIEW_APP_INDEX_PATH,
   PREVIEW_FILE_ASSETS_PREFIX,
   PREVIEW_FILE_RESOURCE_PREFIX,
   PREVIEW_FILE_PRELOAD_RESOURCE,
-  // PREVIEW_APP_INDEX_PATH,
   _TODO_ROUTER_NAME_BEFORE_PREVIEW_SERVICE,
-} from '@/common/app';
-import configs from '@/config';
-import { logger } from '@/utils/logger';
+} from "@/common/app";
+import configs from "@/config";
+import { logger } from "@/utils/logger";
 import {
   visited,
   resourceKey,
   tryLoadResource,
-  // OVER_SANDBOX,
   fetchResourceOrThrow,
-  // visitedOverSandbox,
   useLatestAppResourceIfNotMatch,
-} from '@/source-management/remote-source';
-import Optimizer from '@/optimizer/optimizer';
-import { consumeError } from '@/source-management/error';
-import { ResourceNotFoundException } from '@/common/exceptions';
+} from "@/source-management/remote-source";
+import Optimizer from "@/optimizer/optimizer";
+import { consumeError } from "@/source-management/error";
+import { ResourceNotFoundException } from "@/common/exceptions";
 
 class PreviewServer {
-  private status: 'ready' | 'wait' = 'wait';
+  private status: "ready" | "wait" = "wait";
   private internalServer?: ViteDevServer;
   private static instance: PreviewServer;
-  private ensureEntryFromUrl?: ModuleGraph['ensureEntryFromUrl'];
+  private ensureEntryFromUrl?: ModuleGraph["ensureEntryFromUrl"];
 
   public optimizer: Optimizer;
 
@@ -64,7 +59,7 @@ class PreviewServer {
       has() {},
     } as any;
     this.ensureEntryFromUrl = this.internalServer.moduleGraph.ensureEntryFromUrl.bind(
-      this.internalServer.moduleGraph,
+      this.internalServer.moduleGraph
     );
     // @ts-ignore
     this.internalServer.moduleGraph.ensureEntryFromUrl = this.ensureEntryFromUrlOverride;
@@ -73,10 +68,10 @@ class PreviewServer {
     //   this.internalServer.moduleGraph,
     // );
     // this.internalServer.moduleGraph._ensureEntryFromUrl = this.ensureEntryFromUrlOverride;
-    this.status = 'ready';
+    this.status = "ready";
     app.use(this.middleware);
     app.use(this.errorMiddleware);
-    logger.info('preview server start success');
+    logger.info("preview server start success");
   }
 
   invalidateModuleById(id: string) {
@@ -102,20 +97,6 @@ class PreviewServer {
     return true;
   }
 
-  // invalidateModulesByBound(isToUpperBound: boolean) {
-  //   const ids = Array.from(this.internalServer?.moduleGraph.idToModuleMap.keys() || []);
-  //   // here we invalidate early half of graph modules
-  //   const prepareToRuin = ids.slice(0, isToUpperBound ? ids.length : Math.ceil(ids.length / 2));
-  //   logger.warn(`preview: memory over size!! start clear visted module: ${prepareToRuin.length}`);
-  //   for (const id of prepareToRuin) {
-  //     console.log('id: ', id);
-  //     if (id.startsWith(PREVIEW_ROOT_DIR)) {
-
-  //     }
-  //     this.invalidateModuleById(id);
-  //   }
-  // }
-
   async destory() {
     return this.internalServer?.close();
   }
@@ -129,8 +110,8 @@ class PreviewServer {
 
   static async getInstanceAsync() {
     return waitOnCondition(
-      () => PreviewServer.instance.status === 'ready',
-      'PreviewServer: wait on preview server init',
+      () => PreviewServer.instance.status === "ready",
+      "PreviewServer: wait on preview server init"
     ).then(() => this.instance);
   }
 
@@ -147,7 +128,7 @@ class PreviewServer {
 
       if (
         key?.root === config.root &&
-        key?.plugins?.some((p: any) => p.name === 'vite-plugin-externals') &&
+        key?.plugins?.some((p: any) => p.name === "vite-plugin-externals") &&
         val?.metadata?.hash
       ) {
         context.optimizer.init(val);
@@ -202,7 +183,6 @@ class PreviewServer {
       // sandbox,
       h,
       appId,
-      platform,
     } = asModuleSpecifierInfo(ctx.request.query);
 
     // only app source code have valid appId on query
@@ -211,38 +191,41 @@ class PreviewServer {
     }
 
     try {
-      const latestVersion = await useLatestAppResourceIfNotMatch(appId, platform, h);
+      const latestVersion = await useLatestAppResourceIfNotMatch(appId, h);
       if (latestVersion !== h)
         // TODO(@wangbinq): we should do a fully reload on the client
         // ensure use latest version to load resource
-        ctx.req.url = `${ctx.request.path}?h=${latestVersion}&${moduleSpecifierInfo2Str({
+        ctx.req.url = `${
+          ctx.request.path
+        }?h=${latestVersion}&${moduleSpecifierInfo2Str({
           appId,
           // sandbox,
-          platform,
         })}`;
 
       // const id = ctx.request.url.replace(PREVIEW_FILE_RESOURCE_PREFIX, '');
       // if (Number(sandbox) > OVER_SANDBOX) {
       //   visitedOverSandbox.set(id, true);
       // }
-      // visited.get(resourceKey(appId, platform))?.set(id, true);
+      // visited.get(resourceKey(appId))?.set(id, true);
     } catch (error) {
       if (error instanceof ResourceNotFoundException) {
         ctx.res.statusCode = 200;
-        ctx.type = 'application/javascript';
+        ctx.type = "application/javascript";
         ctx.res.end(`
           const message = '前端资源已失效，请重新进行前端构建, 资源最后生成时间${new Date(
-            Number(h || '0'),
-          ).toLocaleDateString('zh-CN', {
-            hour: '2-digit',
-            minute: '2-digit',
+            Number(h || "0")
+          ).toLocaleDateString("zh-CN", {
+            hour: "2-digit",
+            minute: "2-digit",
           })}'
           alert(message);
         `);
         return false;
       }
       logger.error(
-        `PreviewServer: can not handle request: ${ctx.req.url}: detail: ${String(error)}`,
+        `PreviewServer: can not handle request: ${
+          ctx.req.url
+        }: detail: ${String(error)}`
       );
     }
 
@@ -254,8 +237,9 @@ class PreviewServer {
 
     if (moduleGraph) {
       const visitedNest = Array.from(visited.keys()).reduce(
-        (acc, k) => (visited.get(k) ? acc.concat(Array.from(visited.get(k)!.keys())) : acc),
-        [] as string[],
+        (acc, k) =>
+          visited.get(k) ? acc.concat(Array.from(visited.get(k)!.keys())) : acc,
+        [] as string[]
       );
       const { idToModuleMap, urlToModuleMap, fileToModulesMap } = moduleGraph;
 
@@ -273,7 +257,7 @@ class PreviewServer {
       };
 
       ctx.response.status = 200;
-      ctx.type = 'application/json';
+      ctx.type = "application/json";
       ctx.body = JSON.stringify(appMods);
       return;
     }
@@ -282,17 +266,19 @@ class PreviewServer {
   }
 
   private async preloadResource(ctx: RouterContext) {
-    const { appId, platform } = ctx.request.query as any;
+    const { appId } = ctx.request.query as any;
 
     try {
-      const appFiles = await fetchResourceOrThrow(appId, platform);
+      const appFiles = await fetchResourceOrThrow(appId);
 
       ctx.response.status = 200;
-      ctx.type = 'application/javascript';
+      ctx.type = "application/javascript";
       ctx.body = JSON.stringify(
         Object.keys(appFiles)
           .map((fileName) => fileName)
-          .filter((fileName) => fileName.endsWith('.ts') || fileName.endsWith('.tsx')),
+          .filter(
+            (fileName) => fileName.endsWith(".ts") || fileName.endsWith(".tsx")
+          )
       );
     } catch (error) {
       ctx.response.status = 404;
@@ -305,21 +291,21 @@ class PreviewServer {
       const query = ctx.request.query;
       const { assetId } = query as { assetId: string };
       const decodedId = decodeURIComponent(assetId);
-      const [pureUrl, idQueryStr] = decodedId.split('?');
-      const { appId, platform, h } = asModuleSpecifierInfo(qs.parse(idQueryStr));
+      const [pureUrl, idQueryStr] = decodedId.split("?");
+      const { appId, h } = asModuleSpecifierInfo(qs.parse(idQueryStr));
       if (appId) {
-        await useLatestAppResourceIfNotMatch(appId, platform, h);
+        await useLatestAppResourceIfNotMatch(appId, h);
 
-        const content = tryLoadResource(appId, platform, pureUrl);
+        const content = tryLoadResource(appId, pureUrl);
 
-        ctx.body = Buffer.from(content || '', 'base64');
-        ctx.type = mime.getType(pureUrl) || '';
+        ctx.body = Buffer.from(content || "", "base64");
+        ctx.type = mime.getType(pureUrl) || "";
       }
     } catch (error) {
       logger.error(
-        `PreviewServer: can not handle assets request: ${ctx.request.url}, detail: ${String(
-          error,
-        )}`,
+        `PreviewServer: can not handle assets request: ${
+          ctx.request.url
+        }, detail: ${String(error)}`
       );
       ctx.status = 404;
     }
@@ -328,13 +314,13 @@ class PreviewServer {
   private ensureEntryFromUrlOverride = async (
     rawUrl: string,
     ssr?: boolean,
-    setIsSelfAccepting = true,
+    setIsSelfAccepting = true
   ) => {
     try {
-      const queryStr = rawUrl.split('?')[1];
-      const { appId, platform } = asModuleSpecifierInfo(qs.parse(queryStr || ''));
+      const queryStr = rawUrl.split("?")[1];
+      const { appId } = asModuleSpecifierInfo(qs.parse(queryStr || ""));
       if (appId !== INVALID_APP_QUERY_PLACEHOLDER) {
-        const resurceKey = resourceKey(appId, platform);
+        const resurceKey = resourceKey(appId);
         if (!visited.get(resurceKey)) {
           visited.set(resurceKey, new Map());
         }
@@ -342,7 +328,9 @@ class PreviewServer {
         visited.get(resurceKey)!.set(rawUrl, true);
       }
     } catch (error) {
-      logger.error(`PreviewServer: can not set module info, detail: ${String(error)}`);
+      logger.error(
+        `PreviewServer: can not set module info, detail: ${String(error)}`
+      );
     }
 
     return this.ensureEntryFromUrl!(rawUrl, ssr, setIsSelfAccepting);
@@ -353,7 +341,7 @@ class PreviewServer {
     const err = consumeError(cleanUrl(ctx.request.url));
     if (err) {
       ctx.response.status = 200;
-      ctx.type = 'application/javascript';
+      ctx.type = "application/javascript";
       ctx.body = `
       // if you dig into this file, it means something wrong with this file, and the error is represented as the import path
       import "\\n ${err.id} \\n compile error \\n ${err.message} \\n detail: \\n ${err.frame}";`;
@@ -395,26 +383,15 @@ class PreviewServer {
     // samplingLog(ctx.response, ctx.request.url);
     if (status >= 400 || status < 200) {
       logger.error(
-        `PreviewServer: can not handle request: ${ctx.req.url}, response: ${JSON.stringify(
-          ctx.response,
-        )}`,
+        `PreviewServer: can not handle request: ${
+          ctx.req.url
+        }, response: ${JSON.stringify(ctx.response)}`
       );
       return;
     }
-    ctx.set('Cache-Control', 'public, max-age=604800');
-    ctx.set('Expires', new Date(Date.now() + 604800000).toUTCString());
+    ctx.set("Cache-Control", "public, max-age=604800");
+    ctx.set("Expires", new Date(Date.now() + 604800000).toUTCString());
   };
-
-  private async html(ctx: RouterContext) {
-    await useLatestAppResourceIfNotMatch('xxx', 'xxx', '');
-    ctx.type = 'html';
-    const remote = tryLoadResource(
-      'xxx',
-      'xxx',
-      '/xxx/xxx/src/remotes/remoteEntry.js',
-    );
-    ctx.body = remote;
-  }
 }
 
 export default PreviewServer;

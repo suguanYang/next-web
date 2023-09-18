@@ -1,15 +1,15 @@
 /** the lifecycle will manage preview app status */
-import { getLock } from '@/service/lock';
-import { getClient } from '@/service/redis';
+import { getLock } from "@/infra/lock";
+import { getClient } from "@/service/redis";
 
 const appRedisKey = (appId: string) => `preview-status:{${appId}}`;
 const appErrorMsg = (appId: string) => `preview-error-msg:{${appId}}`;
 
 export const MAX_TIMEOUT = 60 * 1000 * 10; // 10 minutes
 export enum APP_STATUS {
-  IDLE = 'idle',
-  PENDING = 'pending',
-  FAILED = 'failed',
+  IDLE = "idle",
+  PENDING = "pending",
+  FAILED = "failed",
 }
 export const pendingAppResource = async (appId: string) => {
   const lock = getLock();
@@ -24,7 +24,7 @@ export const pendingAppResource = async (appId: string) => {
     await client
       .pipeline()
       .del(appErrorMsg(appId))
-      .set(appRedisKey(appId), APP_STATUS.PENDING, 'PX', MAX_TIMEOUT)
+      .set(appRedisKey(appId), APP_STATUS.PENDING, "PX", MAX_TIMEOUT)
       .exec();
     return true;
   } finally {

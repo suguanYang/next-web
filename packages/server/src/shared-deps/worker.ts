@@ -1,8 +1,8 @@
-import 'module-alias/register';
+import "module-alias/register";
 
-import { setUpRedis } from '@/service/redis';
-import { setupRedisLock } from '@/service/lock';
-import SharedDependecyManger from '@/shared-deps';
+import { setUpRedis } from "@/service/redis";
+import { setupRedisLock } from "@/infra/lock";
+import SharedDependecyManger from "@/shared-deps";
 
 export default async () => {
   const client = await setUpRedis();

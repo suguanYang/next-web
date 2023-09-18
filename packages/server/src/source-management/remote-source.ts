@@ -9,10 +9,10 @@
  *  1. try to check consistency(version)
  *  2. update resource and invalidate module graph if in-consistency found
  */
-import { readFile } from 'fs/promises';
-import { performance } from 'perf_hooks';
+import { readFile } from "fs/promises";
+import { performance } from "perf_hooks";
 
-import cron from 'node-cron';
+import cron from "node-cron";
 
 import {
   timer,
@@ -23,45 +23,33 @@ import {
   DEFAULT_ASSETS_RE,
   moduleSpecifierInfo2Str,
   millisecondsUntilEndOfToday,
-} from '@/utils';
+} from "@/utils";
 import {
   InvalideResourceException,
   ResourceNotFoundException,
   ResourceFileNotFoundException,
-} from '@/common/exceptions';
-import PreviewServer from '@/server';
-import { logger } from '@/utils/logger';
-import { getLock } from '@/service/lock';
-import { getClient } from '@/service/redis';
-import { OUT_DIR, PreviewInfo, TerminalLowerCaseEnum } from '@/common/app';
+} from "@/common/exceptions";
+import PreviewServer from "@/server";
+import { logger } from "@/utils/logger";
+import { getLock } from "@/infra/lock";
+import { getClient } from "@/service/redis";
+import { OUT_DIR, PreviewInfo } from "@/common/app";
 
 // using same hash slot with {appID}
-const redisSourcesKey = (appId: string, platform: string) =>
-  `preview-resources:{${appId}}-${platform}`;
-export const redisVersionKey = (appId: string, platform: string) =>
-  `preview-version:{${appId}}-${platform}`;
+const redisSourcesKey = (appId: string) => `preview-resources:{${appId}}`;
+export const redisVersionKey = (appId: string) => `preview-version:{${appId}}`;
 
 // use local cache to reduce the network overhead
-export const resourceKey = (appId: string, platform: string) => `${appId}-${platform}`;
+export const resourceKey = (appId: string) => `${appId}`;
 const resources: Map<string, Map<string, string> | undefined> = new Map();
 export const visited: Map<string, Map<string, boolean> | undefined> = new Map();
 // export const OVER_SANDBOX = 2;
 // export const visitedOverSandbox = new Map();
 
-// do not expire these resources
-const PERSISTENT_RESOURCE_LIST = [
-  '4637327028276380818',
-  '4778028619903289062',
-  '2776130152975518413',
-  '1492794990099121396',
-  '1957033645480561621',
-  '335172694483814428',
-];
-
-const mergeResource = async (appId: string, platform: string, files: Record<string, string>) => {
+const mergeResource = async (appId: string, files: Record<string, string>) => {
   try {
-    const latestResourceStr = await getClient().get(redisSourcesKey(appId, platform));
-    const latestResource = JSON.parse(latestResourceStr || '{}');
+    const latestResourceStr = await getClient().get(redisSourcesKey(appId));
+    const latestResource = JSON.parse(latestResourceStr || "{}");
 
     const newResource = {
       ...latestResource,
@@ -70,7 +58,9 @@ const mergeResource = async (appId: string, platform: string, files: Record<stri
 
     return newResource;
   } catch (error) {
-    logger.error(`preview: failed to merge resource ${appId} ${platform}, ${error?.toString()}`);
+    logger.error(
+      `preview: failed to merge resource ${appId}, ${error?.toString()}`
+    );
   }
 
   return files;
@@ -92,11 +82,15 @@ const IGNORED_RESOURCES = [
 ];
 
 // lock not required here since it belongs to the process of resource generation, its already has lock on it
-export const writeToRemote = async (app: PreviewInfo, version: string, incremental: boolean) => {
-  const { appId, platform, rootDir } = app;
+export const writeToRemote = async (
+  app: PreviewInfo,
+  version: string,
+  incremental: boolean
+) => {
+  const { appId, rootDir } = app;
   const stop = timer();
-  logger.info(`preview: start copying app ${appId}-${platform} resources to remote`);
-  const localAppRootDir = `${rootDir}/${platform}`;
+  logger.info(`preview: start copying app ${appId} resources to remote`);
+  const localAppRootDir = `${rootDir}`;
 
   const files: Record<string, string> = {};
 
@@ -113,117 +107,120 @@ export const writeToRemote = async (app: PreviewInfo, version: string, increment
     async onFile(filePath) {
       if (DEFAULT_ASSETS_RE.test(filePath)) {
         logger.info(`preivew: customer assets find: ${filePath}`);
-        files[filePath.replace(OUT_DIR, '')] = await readFile(filePath, 'base64');
+        files[filePath.replace(OUT_DIR, "")] = await readFile(
+          filePath,
+          "base64"
+        );
         return;
       }
 
-      let sourceContent = await readFile(filePath, 'utf-8');
+      let sourceContent = await readFile(filePath, "utf-8");
 
-      files[filePath.replace(OUT_DIR, '')] = sourceContent;
+      files[filePath.replace(OUT_DIR, "")] = sourceContent;
     },
   });
 
   const client = getClient();
   const lock = getLock();
-  const unLock = await lock(redisSourcesKey(appId, platform));
-  const expireTime = PERSISTENT_RESOURCE_LIST.includes(appId)
-    ? ONE_YEAR * 10
-    : millisecondsUntilEndOfToday();
+  const unLock = await lock(redisSourcesKey(appId));
+  const expireTime = millisecondsUntilEndOfToday();
   try {
     // start transaction
     await client
       .multi()
       .set(
-        redisSourcesKey(appId, platform),
-        JSON.stringify(incremental ? await mergeResource(appId, platform, files) : files),
-        'PX',
-        expireTime,
+        redisSourcesKey(appId),
+        JSON.stringify(incremental ? await mergeResource(appId, files) : files),
+        "PX",
+        expireTime
       )
       // the files are commonly greater than 4M, its not a good idea to transfer these
       // files over tcp, since there will be many round-trips over the network.
       // use a version key to check the consistency will decrease average round-trips
-      .set(redisVersionKey(appId, platform), version, 'PX', expireTime)
+      .set(redisVersionKey(appId), version, "PX", expireTime)
       .exec();
 
     logger.info(
-      `preivew: write app ${appId}: ${platform} resources to remote in ${stop()} seconds`,
+      `preivew: write app ${appId} resources to remote in ${stop()} seconds`
     );
   } catch (error) {
     logger.error(
-      `preivew: write app ${appId}: ${platform} resources to remote in failed, detail: ${String(
-        error,
-      )}`,
+      `preivew: write app ${appId} resources to remote in failed, detail: ${String(
+        error
+      )}`
     );
   } finally {
     await unLock();
   }
 };
 
-// ensure resources[appId-platform] exists otherwise throw exception
-export const fetchResourceOrThrow = async (appId: string, platform: string) => {
+// ensure resources[appId] exists otherwise throw exception
+export const fetchResourceOrThrow = async (appId: string) => {
   const perfNow = performance.now();
   const client = getClient();
   try {
-    const resource = await client.get(redisSourcesKey(appId, platform));
-    const version = await client.get(redisVersionKey(appId, platform));
+    const resource = await client.get(redisSourcesKey(appId));
+    const version = await client.get(redisVersionKey(appId));
     if (resource && version) {
       // ensure version
       const files: Record<string, string> = JSON.parse(resource);
       files._version = version;
-      resources.set(resourceKey(appId, platform), new Map(Object.entries(files))); // store to local
-      // visited.set(resourceKey(appId, platform), new Map());
+      resources.set(resourceKey(appId), new Map(Object.entries(files))); // store to local
+      // visited.set(resourceKey(appId), new Map());
 
       logger.info(
-        `preivew: get app ${resourceKey(appId, platform)} resources to local in ${timeFrom(
-          perfNow,
-        )}`,
+        `preivew: get app ${resourceKey(
+          appId
+        )} resources to local in ${timeFrom(perfNow)}`
       );
       return files;
     }
   } catch (err) {
     logger.error(
-      `preview: can not fetch resource for ${resourceKey(appId, platform)}, detail: ${String(err)}`,
+      `preview: can not fetch resource for ${resourceKey(
+        appId
+      )}, detail: ${String(err)}`
     );
   }
   // expired or no resources on the remote
   throw new ResourceNotFoundException(
-    `preivew: ${resourceKey(appId, platform)} resouces not existed`,
+    `preivew: ${resourceKey(appId)} resouces not existed`
   );
 };
 
-export const tryLoadResource = (appId: string, platform: string, file: string) => {
-  if (!resources.has(resourceKey(appId, platform))) {
+export const tryLoadResource = (appId: string, file: string) => {
+  if (!resources.has(resourceKey(appId))) {
     throw new ResourceFileNotFoundException(
-      `preview: can not load resource ${resourceKey(appId, platform)} with file: ${file}`,
+      `preview: can not load resource ${resourceKey(appId)} with file: ${file}`
     );
   }
   const pureFileId = cleanUrl(file);
-  const content = resources.get(resourceKey(appId, platform))?.get(pureFileId);
-  if (typeof content !== 'string') {
+  const content = resources.get(resourceKey(appId))?.get(pureFileId);
+  if (typeof content !== "string") {
     throw new InvalideResourceException(
       `preview: invalid resource ${resourceKey(
-        appId,
-        platform,
+        appId
       )} load ${pureFileId}, current version: ${resources
-        .get(resourceKey(appId, platform))
-        ?.get('_version')}}`,
+        .get(resourceKey(appId))
+        ?.get("_version")}}`
     );
   }
   return content;
 };
 
-const EXTENSIONS = ['.tsx', '.ts', '.js'];
-const CSS_EXTENSIONS = ['.css', '.less', 'scss', 'sass'];
+const EXTENSIONS = [".tsx", ".ts", ".js"];
+const CSS_EXTENSIONS = [".css", ".less", "scss", "sass"];
 export const tryResolveMemoizedFile = (
   appId: string,
-  platform: string,
   tryFile: string,
   // sandbox: string = '1',
-  isCss?: boolean,
+  isCss?: boolean
 ) => {
-  if (!resources.has(resourceKey(appId, platform))) {
+  if (!resources.has(resourceKey(appId))) {
     throw new ResourceFileNotFoundException(
-      `preview: can not resolve resource ${resourceKey(appId, platform)} with file: ${tryFile}`,
+      `preview: can not resolve resource ${resourceKey(
+        appId
+      )} with file: ${tryFile}`
     );
   }
   const testFiles: string[] = [];
@@ -233,13 +230,13 @@ export const tryResolveMemoizedFile = (
     testFiles.push(tryFile + ext);
   });
   exts.forEach((ext) => {
-    testFiles.push(tryFile + '/index' + ext);
+    testFiles.push(tryFile + "/index" + ext);
   });
 
   let finalPath: string | null = null;
   // if (IS_SINGLE_ENV) {
   testFiles.forEach((testFile) => {
-    if (resources.get(resourceKey(appId, platform))!.has(testFile)) {
+    if (resources.get(resourceKey(appId))!.has(testFile)) {
       finalPath = testFile;
       return;
     }
@@ -258,37 +255,35 @@ export const tryResolveMemoizedFile = (
   if (finalPath === null) {
     throw new InvalideResourceException(
       `preview: invalid resource ${resourceKey(
-        appId,
-        platform,
+        appId
       )} resolve ${tryFile}, current version: ${resources
-        .get(resourceKey(appId, platform))
-        ?.get('_version')}}`,
+        .get(resourceKey(appId))
+        ?.get("_version")}}`
     );
   }
 
   const resolved = `${finalPath}?h=${resources
-    .get(resourceKey(appId, platform))!
-    .get('_version')}&${moduleSpecifierInfo2Str({
+    .get(resourceKey(appId))!
+    .get("_version")}&${moduleSpecifierInfo2Str({
     appId,
     // sandbox,
-    platform,
   })}`;
   // here we add visted again since there may exist dynamic imports
-  // if (!visited.get(resourceKey(appId, platform))) {
-  //   visited.set(resourceKey(appId, platform), new Map());
+  // if (!visited.get(resourceKey(appId))) {
+  //   visited.set(resourceKey(appId), new Map());
   // }
   // if (Number(sandbox) > OVER_SANDBOX) {
   //   visitedOverSandbox.set(resolved, true);
   // }
-  // visited.get(resourceKey(appId, platform))!.set(resolved, true);
+  // visited.get(resourceKey(appId))!.set(resolved, true);
 
   return resolved;
 };
 
-const useLatestAppResource = async (id: string, platform: string) => {
-  const key = resourceKey(id, platform);
+const useLatestAppResource = async (id: string) => {
+  const key = resourceKey(id);
   const client = getClient();
-  const version = await client.get(redisVersionKey(id, platform));
+  const version = await client.get(redisVersionKey(id));
   // the remote file has been expired
   if (!version) {
     invalidateAppResourcesByKey(key);
@@ -297,50 +292,53 @@ const useLatestAppResource = async (id: string, platform: string) => {
   }
 
   // update local resource if version mismatch
-  if (!resources.has(key) || version !== resources.get(key)!.get('_version')) {
+  if (!resources.has(key) || version !== resources.get(key)!.get("_version")) {
     logger.info(
       `preview: version mismatch detected between local files and remote for resource: ${resourceKey(
-        id,
-        platform,
-      )}`,
+        id
+      )}`
     );
     invalidateAppResourcesByKey(key);
-    await fetchResourceOrThrow(id, platform);
+    await fetchResourceOrThrow(id);
   }
 
-  return resources.get(key)!.get('_version');
+  return resources.get(key)!.get("_version");
 };
 
-export const useLatestAppResourceIfNotMatch = async (id: string, platform: string, v?: string) => {
+export const useLatestAppResourceIfNotMatch = async (
+  id: string,
+  v?: string
+) => {
   // ensure resources exists
-  if (resources.get(resourceKey(id, platform))?.get('_version') === v) {
+  if (resources.get(resourceKey(id))?.get("_version") === v) {
     return v;
   }
 
-  return useLatestAppResource(id, platform);
+  return useLatestAppResource(id);
 };
 
 export const checkOnResourcesConsistency = () => {
   const useLatestResource = async () => {
-    const idWithPlatforms = resources.keys();
+    const ids = resources.keys();
     await Promise.all(
-      Array.from(idWithPlatforms).map((idWithKey) => {
-        const [id, platform] = idWithKey.split('-');
-        return useLatestAppResource(id, platform);
-      }),
+      Array.from(ids).map((id) => {
+        return useLatestAppResource(id);
+      })
     );
   };
 
   let running = false;
 
-  cron.schedule('* * * * *', () => {
+  cron.schedule("* * * * *", () => {
     (async () => {
       try {
         if (running) {
           return;
         }
         running = true;
-        logger.info('checkOnResourcesConsistency and memory check runing every minutes.......');
+        logger.info(
+          "checkOnResourcesConsistency and memory check runing every minutes......."
+        );
         memoryUsageCheck();
         await useLatestResource();
         running = false;
@@ -349,7 +347,9 @@ export const checkOnResourcesConsistency = () => {
           return;
         }
         logger.error(
-          `preview: failed to check remote file consistency, retry, detail: ${String(error)}`,
+          `preview: failed to check remote file consistency, retry, detail: ${String(
+            error
+          )}`
         );
         running = false;
       }
@@ -377,7 +377,9 @@ const invalidateAppResourcesByKey = (key: string) => {
     } else {
       logger.warn(`preview: can not clear module graph for resource ${key}`);
     }
-    logger.info(`preview: invalidate app resource ${key} in ${timeFrom(perfNow)}`);
+    logger.info(
+      `preview: invalidate app resource ${key} in ${timeFrom(perfNow)}`
+    );
   }
 };
 
@@ -397,9 +399,11 @@ const memoryUsageCheck = () => {
 
   const prepareToRuin = resourceKeys.slice(
     0,
-    isToUpperBound ? resourceKeys.length : Math.ceil(resourceKeys.length / 2),
+    isToUpperBound ? resourceKeys.length : Math.ceil(resourceKeys.length / 2)
   );
-  logger.warn(`preview: start destory visted module graph: ${prepareToRuin.length}`);
+  logger.warn(
+    `preview: start destory visted module graph: ${prepareToRuin.length}`
+  );
   for (const key of prepareToRuin) {
     invalidateAppResourcesByKey(key);
   }

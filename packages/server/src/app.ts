@@ -1,28 +1,27 @@
-import path from 'path';
+import path from "path";
 
-import Koa from 'koa';
-import 'module-alias/register';
-import Router from 'koa-router';
-import bodyParser from 'koa-bodyparser';
+import Koa from "koa";
+import "module-alias/register";
+import Router from "koa-router";
+import bodyParser from "koa-bodyparser";
 
-import '@/utils/sentry';
-import ApiRouter from '@/api';
-import PreviewServer from '@/server';
-import { logger } from '@/utils/logger';
-import { setUpRedis } from '@/service/redis';
-import { setupRedisLock } from '@/service/lock';
-import Prebundler from '@/optimizer/prebundler';
-import SharedDependecyManger from '@/shared-deps';
-import { PORT } from '@/common/env-vars';
-import runingInBackground from '@/shared-deps/background-job';
-import { OptimizingNewDepsException } from '@/common/exceptions';
-import { checkOnResourcesConsistency } from '@/source-management/remote-source';
+import "@/utils/sentry";
+import ApiRouter from "@/api";
+import PreviewServer from "@/server";
+import { logger } from "@/utils/logger";
+import { setUpRedis } from "@/service/redis";
+import { setupRedisLock } from "@/infra/lock";
+import Prebundler from "@/optimizer/prebundler";
+import SharedDependecyManger from "@/shared-deps";
+import { PORT } from "@/common/env-vars";
+import runingInBackground from "@/shared-deps/background-job";
+import { OptimizingNewDepsException } from "@/common/exceptions";
+import { checkOnResourcesConsistency } from "@/source-management/remote-source";
 
 const app = new Koa();
 
 const start = async () => {
   try {
-
     // const bundler = new Prebundler();
     // await bundler.prebundling();
 
@@ -61,7 +60,7 @@ const start = async () => {
     // runingInBackground();
 
     logger.info(
-      `App: this server is running at http://localhost:${PORT},process-id:${process.pid}`,
+      `App: this server is running at http://localhost:${PORT},process-id:${process.pid}`
     );
     return Promise.resolve(server);
   } catch (error) {

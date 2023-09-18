@@ -1,8 +1,8 @@
-import path from 'path';
-import { readFile } from 'fs/promises';
+import path from "path";
+import { readFile } from "fs/promises";
 
-import qs from 'qs';
-import { normalizePath, Plugin } from 'vite';
+import qs from "qs";
+import { normalizePath, Plugin } from "vite";
 
 import {
   cleanUrl,
@@ -11,19 +11,22 @@ import {
   DEFAULT_ASSETS_RE,
   asModuleSpecifierInfo,
   INVALID_APP_QUERY_PLACEHOLDER,
-} from '@/utils';
-import PreviewServer from '@/server';
-import { logger } from '@/utils/logger';
-import { SERVICE_DOMAIN_NAME } from '@/common/env-vars';
-import { FS_PREFIX, PREVIEW_FILE_ASSETS_PREFIX } from '@/common/app';
-import { tryLoadResource, tryResolveMemoizedFile } from '@/source-management/remote-source';
+} from "@/utils";
+import PreviewServer from "@/server";
+import { logger } from "@/utils/logger";
+import { SERVICE_DOMAIN_NAME } from "@/common/env-vars";
+import { FS_PREFIX, PREVIEW_FILE_ASSETS_PREFIX } from "@/common/app";
+import {
+  tryLoadResource,
+  tryResolveMemoizedFile,
+} from "@/source-management/remote-source";
 
-const extractQueryFromImporter = (importer: string) => importer?.split('?')[1];
+const extractQueryFromImporter = (importer: string) => importer?.split("?")[1];
 
 const memoizedLoader = (root: string): Plugin => {
   const cwd = process.cwd();
   return {
-    name: 'memoized-loader',
+    name: "memoized-loader",
     async resolveId(id, importer) {
       const server = PreviewServer.getInstance();
 
@@ -48,12 +51,12 @@ const memoizedLoader = (root: string): Plugin => {
       }
 
       // these are already resolved sources(by alias) requests from client
-      if (id.startsWith('/')) {
+      if (id.startsWith("/")) {
         return id;
       }
 
       //relative
-      if (id.startsWith('.') && importer) {
+      if (id.startsWith(".") && importer) {
         const basedir = path.dirname(importer);
         const fsPath = path.resolve(basedir, id);
         const normalizedFsPath = normalizePath(fsPath);
@@ -72,16 +75,14 @@ const memoizedLoader = (root: string): Plugin => {
         const {
           appId,
           //  sandbox,
-          platform,
-        } = asModuleSpecifierInfo(qs.parse(queryStr || ''));
+        } = asModuleSpecifierInfo(qs.parse(queryStr || ""));
         // ensure its a app resource request
         if (appId === INVALID_APP_QUERY_PLACEHOLDER) {
           return null;
         }
         return tryResolveMemoizedFile(
           appId,
-          platform,
-          fsPath,
+          fsPath
           // sandbox
         );
       }
@@ -110,7 +111,9 @@ const memoizedLoader = (root: string): Plugin => {
         }
       }
 
-      logger.info(`preview: bypass memoized loader resolve for ${id} from ${importer}`);
+      logger.info(
+        `preview: bypass memoized loader resolve for ${id} from ${importer}`
+      );
       return null;
     },
     async load(id) {
@@ -118,7 +121,7 @@ const memoizedLoader = (root: string): Plugin => {
 
       if (DEFAULT_ASSETS_RE.test(cleanUrl(id))) {
         return `export default "${SERVICE_DOMAIN_NAME}${PREVIEW_FILE_ASSETS_PREFIX}?assetId=${encodeURIComponent(
-          id,
+          id
         )}"`;
       }
 
@@ -126,25 +129,27 @@ const memoizedLoader = (root: string): Plugin => {
         const file = cleanUrl(id);
 
         try {
-          return await readFile(file, 'utf-8');
+          return await readFile(file, "utf-8");
         } catch (e) {
-          logger.error(`preview: can not read optimizing file, detail: ${String(e)}`);
+          logger.error(
+            `preview: can not read optimizing file, detail: ${String(e)}`
+          );
         }
       }
 
-      const queryStr = id?.split('?')[1];
-      const { appId, platform } = asModuleSpecifierInfo(qs.parse(queryStr || ''));
+      const queryStr = id?.split("?")[1];
+      const { appId } = asModuleSpecifierInfo(qs.parse(queryStr || ""));
 
       if (appId !== INVALID_APP_QUERY_PLACEHOLDER) {
         // try load from memoized files
-        const file = tryLoadResource(appId, platform, id);
+        const file = tryLoadResource(appId, id);
         return file;
       }
 
       // logger.info(`preview: bypass memoized loader load for ${id}`);
       return null;
     },
-    enforce: 'pre',
+    enforce: "pre",
   };
 };
 

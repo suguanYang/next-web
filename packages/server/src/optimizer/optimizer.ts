@@ -9,26 +9,26 @@ import {
   resolveConfig,
   OptimizedDepInfo,
   DepOptimizationMetadata,
-} from 'vite';
+} from "vite";
 
-import configs from '@/config';
-import { logger } from '@/utils/logger';
-import { getLock } from '@/service/lock';
-import { getClient } from '@/service/redis';
-import { flattenId, ONE_DAY } from '@/utils';
+import configs from "@/config";
+import { logger } from "@/utils/logger";
+import { getLock } from "@/infra/lock";
+import { getClient } from "@/service/redis";
+import { flattenId, ONE_DAY } from "@/utils";
 // import uploadFiles from '@/service/uploadFiles';
-import { OSS_DOMAIN_NAME } from '@/common/env-vars';
-import { OptimizingNewDepsException } from '@/common/exceptions';
-import { PREVIEW_ROOT_DIR, SHARED_DEPS_PATH } from '@/common/app';
+import { OSS_DOMAIN_NAME } from "@/common/env-vars";
+import { OptimizingNewDepsException } from "@/common/exceptions";
+import { PREVIEW_ROOT_DIR, SHARED_DEPS_PATH } from "@/common/app";
 
 type DepOptimizationMetadataWithVersion = DepOptimizationMetadata & {
   _version?: string;
 };
 class Optimizer {
   public processing?: Promise<any>;
-  private OSS_TARGET_DIR = '/lib/esm';
+  private OSS_TARGET_DIR = "/lib/esm";
   private NEW_DEPS_DIR = `${PREVIEW_ROOT_DIR}/.new_deps`;
-  private SYNC_KEY = 'new-dependencies:';
+  private SYNC_KEY = "new-dependencies:";
   private opt?: DepsOptimizer;
   private originnalIsOptimizedFile: (id: string) => boolean = () => false;
 
@@ -51,7 +51,7 @@ class Optimizer {
   async transform(dep: string, outDir: string, version?: string) {
     const config = configs({
       root: this.workDir, // use node_modules in workDir
-      app: '', // no need to load runtime config
+      app: "", // no need to load runtime config
       build: true,
     });
     config.optimizeDeps!.entries = [this.workDir];
@@ -60,7 +60,10 @@ class Optimizer {
 
     // no chunks!
     // config.optimizeDeps!.esbuildOptions!.splitting = false;
-    const metadata = await optimizeDeps(await resolveConfig(config, 'serve'), true);
+    const metadata = await optimizeDeps(
+      await resolveConfig(config, "serve"),
+      true
+    );
 
     const { optimized, depInfoList } = metadata;
     config.optimizeDeps!.include = [];
@@ -68,7 +71,7 @@ class Optimizer {
 
     const buildConfig: InlineConfig = {
       ...config,
-      root: '',
+      root: "",
       build: {
         ...config.build,
         lib: {
@@ -76,7 +79,7 @@ class Optimizer {
             [dep]: optimized[dep].file,
           },
           name: dep,
-          formats: ['es'],
+          formats: ["es"],
           fileName,
         },
         outDir,
@@ -98,7 +101,8 @@ class Optimizer {
     const client = getClient();
     // try {
     const depInfoStr = await client.get(`${this.SYNC_KEY}${dep}`);
-    const remoteDepInfo: DepOptimizationMetadataWithVersion = depInfoStr && JSON.parse(depInfoStr);
+    const remoteDepInfo: DepOptimizationMetadataWithVersion =
+      depInfoStr && JSON.parse(depInfoStr);
     const skipVersionCheck = !version;
     if (
       remoteDepInfo &&
@@ -134,8 +138,10 @@ class Optimizer {
     const depNames = Object.keys(deps);
     const optimizedDeps = await Promise.all(
       depNames.map((n) =>
-        this.tryGetMetadataFromRemote(n, deps[n]).then((meta) => (!!meta ? n : '')),
-      ),
+        this.tryGetMetadataFromRemote(n, deps[n]).then((meta) =>
+          !!meta ? n : ""
+        )
+      )
     );
     return depNames
       .filter((n) => !optimizedDeps.includes(n))
@@ -144,11 +150,14 @@ class Optimizer {
           ...acc,
           [name]: deps[name],
         }),
-        {} as { [name: string]: string },
+        {} as { [name: string]: string }
       );
   }
 
-  async shipMetadata2Remote(dep: string, metadata: DepOptimizationMetadataWithVersion) {
+  async shipMetadata2Remote(
+    dep: string,
+    metadata: DepOptimizationMetadataWithVersion
+  ) {
     const client = getClient();
     // try {
     // logger.info(`Optimizer: try ship dep: ${dep} info to remote`);
@@ -163,7 +172,7 @@ class Optimizer {
    */
   async optimizing(dep: string, version?: string) {
     const lock = getLock();
-    const release = await lock(`new-dep:${dep}-${version ? version : ''}`);
+    const release = await lock(`new-dep:${dep}-${version ? version : ""}`);
     let data: DepOptimizationMetadata;
     try {
       const remoteMetadata = await this.tryGetMetadataFromRemote(dep, version);
@@ -181,7 +190,7 @@ class Optimizer {
       }
     } catch (error: any) {
       const errMsg = `Optimizer: try optimzing dep: ${dep}@${version} failed, error: ${String(
-        error,
+        error
       )}`;
       // logger.error(errMsg);
       // throw new OptimizingNewDepsException(
@@ -195,7 +204,8 @@ class Optimizer {
     }
 
     // this.refreshMetadata(data!);
-    const needsInterop = data!.depInfoList.find(({ id }) => id === dep)?.needsInterop;
+    const needsInterop = data!.depInfoList.find(({ id }) => id === dep)
+      ?.needsInterop;
     return {
       exports: [],
       hasImports: !needsInterop, // this can indicate vite
@@ -236,13 +246,14 @@ class Optimizer {
     }
     logger.warn(
       `Optimizer: can not found dependency info from any metadata: ${id}, ${JSON.stringify(
-        metadata,
-      )}`,
+        metadata
+      )}`
     );
   };
 
   isOptimizedDepFile = (normalizedFsPath: string) =>
-    this.originnalIsOptimizedFile(normalizedFsPath) || normalizedFsPath.startsWith(OSS_DOMAIN_NAME);
+    this.originnalIsOptimizedFile(normalizedFsPath) ||
+    normalizedFsPath.startsWith(OSS_DOMAIN_NAME);
   // @LOCAL
   // normalizedFsPath.startsWith('http://localhost:8002');
 
@@ -252,7 +263,7 @@ class Optimizer {
 
   isOptimizedDepUrl = (url: string) => this.opt?.isOptimizedDepUrl(url);
 
-  getBrowserHash = () => this.opt?.metadata.browserHash || '';
+  getBrowserHash = () => this.opt?.metadata.browserHash || "";
 
   // controll the vite behavior
   private registerMissingImport = (id: string, resolved: string) => {
@@ -276,7 +287,7 @@ class Optimizer {
       id,
       file: this.getOptimizedOSSAddress(flattenId(id)),
       src: resolved,
-      browserHash: '',
+      browserHash: "",
       // loading of this pre-bundled dep needs to await for its processing
       processing: promising.then(() => void 0),
       exportsData: promising,
@@ -286,12 +297,18 @@ class Optimizer {
   };
 
   private getOptimizedDepId = (depInfo: OptimizedDepInfo) => {
-    return depInfo.file + '?v=' + this.getBrowserHash();
+    return depInfo.file + "?v=" + this.getBrowserHash();
   };
 
-  private optimizedDepInfoFromId = (id: string): OptimizedDepInfo | undefined => {
+  private optimizedDepInfoFromId = (
+    id: string
+  ): OptimizedDepInfo | undefined => {
     const metadata = this.opt?.metadata;
-    return metadata?.optimized[id] || metadata?.discovered[id] || metadata?.chunks[id];
+    return (
+      metadata?.optimized[id] ||
+      metadata?.discovered[id] ||
+      metadata?.chunks[id]
+    );
   };
 
   // @WARN do not rely on internal metadata(a local state), we should use this carefully!
@@ -308,7 +325,7 @@ class Optimizer {
     // no chunks!
     // this.opt!.metadata.chunks
     this.opt!.metadata.depInfoList = this.opt!.metadata.depInfoList.filter(
-      (info) => !metadata.depInfoList.some((newInfo) => newInfo.id === info.id),
+      (info) => !metadata.depInfoList.some((newInfo) => newInfo.id === info.id)
     ).concat(metadata.depInfoList);
   }
 
