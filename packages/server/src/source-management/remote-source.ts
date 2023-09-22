@@ -84,9 +84,9 @@ const IGNORED_RESOURCES = [
 // lock not required here since it belongs to the process of resource generation, its already has lock on it
 export const writeToRemote = async (
   app: PreviewInfo,
-  version: string,
-  incremental: boolean
+  incremental?: boolean
 ) => {
+  const version = new Date().getTime();
   const { appId, rootDir } = app;
   const stop = timer();
   logger.info(`preview: start copying app ${appId} resources to remote`);

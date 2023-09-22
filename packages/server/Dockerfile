@@ -54,8 +54,6 @@ ENV NODE_OPTIONS --max-old-space-size=8192
 ENV DEBUG vite:transform,vite:time
 
 # ENV PORT 80
-# ENV NACOS_SERVER_HOST mse-a92b2d32-p.nacos-ans.mse.aliyuncs.com
-# ENV NACOS_SERVER_PORT 8848
 
 # ENV OSS_DOMAIN_NAME https://dev.ylioo.com
 # ENV SERVICE_DOMAIN_NAME https://service-dev.ylioo.com
